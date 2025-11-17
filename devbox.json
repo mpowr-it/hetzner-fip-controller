@@ -28,7 +28,7 @@
     "k9s":            "0.40.10",
     "cosign":         "2.5.0",
     "trivy":          "0.55.0",
-    "grype":          "0.81.0",
+    "grype":          "0.103.0",
     "netperf": {
       "version":            "20210121",
       "excluded_platforms": ["aarch64-darwin"]
