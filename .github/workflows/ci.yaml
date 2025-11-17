@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - "**"          # Run on all branches
+      - "**"            # run on all branches
   pull_request:
     branches:
-      - main          # Validate PRs targeting main
+      - main            # validate PRs targeting main
 
 env:
   IMAGE_NAME: mpowr/hetzner-fip-controller
@@ -14,9 +14,14 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    # Chainguard Go Build-Image (Align mit go 1.24)
+
+    # Use Chainguard Go toolchain as job container
     container:
       image: cgr.dev/chainguard/go:latest
+
+    # Disable VCS stamping in Go 1.25+ to avoid "error obtaining VCS status" in CI
+    env:
+      GOFLAGS: -buildvcs=false
 
     steps:
       - name: Checkout repository
@@ -25,6 +30,7 @@ jobs:
       - name: Show Go version
         run: go version
 
+      # Cache Go modules and build cache
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -44,6 +50,7 @@ jobs:
   docker-build:
     needs: build-and-test
     runs-on: ubuntu-latest
+
     # Do not build Docker images for pull requests; only validate code there.
     if: github.event_name == 'push'
 
@@ -57,7 +64,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # No login, no push here
+      # Local CI sanity check: build image, but do not push anywhere
       - name: Build Docker image (no push)
         uses: docker/build-push-action@v6
         with:

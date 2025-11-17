@@ -3,7 +3,7 @@ name: Release Docker Image
 on:
   push:
     tags:
-      - "v*.*.*" # e.g. v1.2.3
+      - "v*.*.*"   # e.g. v1.2.3
 
 env:
   IMAGE_NAME: mpowr/hetzner-fip-controller
@@ -11,8 +11,14 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    # Use Chainguard Go toolchain as job container
     container:
       image: cgr.dev/chainguard/go:latest
+
+    # Disable VCS stamping in Go 1.25+ to avoid "error obtaining VCS status" in CI
+    env:
+      GOFLAGS: -buildvcs=false
 
     steps:
       - name: Checkout repository
@@ -21,6 +27,7 @@ jobs:
       - name: Show Go version
         run: go version
 
+      # Cache Go modules and build cache
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
@@ -41,6 +48,11 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,6 +69,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Derive tags and labels from the git tag (vX.Y.Z)
       - name: Extract Docker metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
@@ -82,20 +95,19 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      # -------------------------------
-      # Security-Hardening
-      # -------------------------------
+      # ------------------------------------------------------------------------
+      # Security hardening: SBOM + Trivy + Grype
+      # ------------------------------------------------------------------------
 
-      - name: Generate SBOM for released image (Syft via Anchore)
+      - name: Generate SBOM for released image (SPDX JSON)
         uses: anchore/sbom-action@v0
         with:
-          # Docker Hub Image, use tag (eg. v1.2.3)
-          image: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          image: docker.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
           format: spdx-json
           output-file: "${{ github.event.repository.name }}-sbom.spdx.json"
           artifact-name: "sbom-${{ github.ref_name }}.spdx.json"
 
-      - name: Run Trivy vulnerability scanner (Docker Hub image)
+      - name: Scan released image with Trivy
         uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: "docker.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
