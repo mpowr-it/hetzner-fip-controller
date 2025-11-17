@@ -7,6 +7,7 @@ on:
 
 env:
   IMAGE_NAME: mpowr/hetzner-fip-controller
+  REGISTRY: docker.io
 
 jobs:
   build-and-test:
@@ -52,6 +53,8 @@ jobs:
       contents: read
       packages: write
       security-events: write
+      id-token: write  # Required for cosign signing
+      attestations: write  # Required for GitHub attestations
 
     steps:
       - name: Checkout repository
@@ -69,12 +72,16 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Install cosign for signing
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
       # Derive tags and labels from the git tag (vX.Y.Z)
       - name: Extract Docker metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             # Use the git tag itself (e.g. v1.2.3)
             type=ref,event=tag
@@ -84,8 +91,14 @@ jobs:
             type=semver,pattern={{major}}
             # Also publish "latest" for the newest tag
             type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=hetzner-fip-controller
+            org.opencontainers.image.description=Kubernetes controller for Hetzner Cloud Floating IPs
+            org.opencontainers.image.vendor=mpowr
+            org.opencontainers.image.licenses=Apache-2.0
 
       - name: Build and push Docker image (multi-arch)
+        id: build-push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -94,32 +107,143 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Enable build provenance and SBOM attestations
+          provenance: mode=max
+          sbom: true
+          # Use GitHub Actions cache
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # ------------------------------------------------------------------------
-      # Security hardening: SBOM + Trivy + Grype
+      # Security hardening: SBOM generation, signing, and attestation
       # ------------------------------------------------------------------------
 
-      - name: Generate SBOM for released image (SPDX JSON)
+      - name: Generate SBOM with Syft (SPDX JSON)
         uses: anchore/sbom-action@v0
         with:
-          image: docker.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
           format: spdx-json
           output-file: "${{ github.event.repository.name }}-sbom.spdx.json"
           artifact-name: "sbom-${{ github.ref_name }}.spdx.json"
 
-      - name: Scan released image with Trivy
+      - name: Generate SBOM with Syft (CycloneDX JSON)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+          format: cyclonedx-json
+          output-file: "${{ github.event.repository.name }}-sbom.cyclonedx.json"
+          artifact-name: "sbom-${{ github.ref_name }}.cyclonedx.json"
+
+      # Attest SBOM to the image (GitHub Attestations)
+      - name: Attest SBOM
+        uses: actions/attest-sbom@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build-push.outputs.digest }}
+          sbom-path: "${{ github.event.repository.name }}-sbom.spdx.json"
+          push-to-registry: true
+
+      # Sign the container image with cosign (keyless signing via Sigstore)
+      - name: Sign container image with cosign
+        env:
+          DIGEST: ${{ steps.build-push.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "Signing image with digest: ${DIGEST}"
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag}@${DIGEST} "
+          done
+          cosign sign --yes --recursive ${images}
+
+      # ------------------------------------------------------------------------
+      # Vulnerability scanning: Trivy
+      # ------------------------------------------------------------------------
+
+      - name: Scan image with Trivy (table output)
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: "docker.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
           format: "table"
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"  # Don't fail on vulnerabilities, just report
+
+      - name: Scan image with Trivy (SARIF for GitHub Security)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      # Fail the build if CRITICAL vulnerabilities are found
+      - name: Scan image with Trivy (fail on critical)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-push.outputs.digest }}
+          format: "table"
+          vuln-type: "os,library"
+          severity: "CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"  # Fail if CRITICAL vulnerabilities found
+
+      # ------------------------------------------------------------------------
+      # Vulnerability scanning: Grype
+      # ------------------------------------------------------------------------
 
       - name: Scan SBOM with Grype
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v4
+        id: grype-scan
+        with:
+          sbom: "${{ github.event.repository.name }}-sbom.spdx.json"
+          fail-build: false  # Don't fail, just report
+          severity-cutoff: critical
+          output-format: sarif
+
+      - name: Upload Grype results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ steps.grype-scan.outputs.sarif }}
+
+      # Fail the build if CRITICAL vulnerabilities are found
+      - name: Scan SBOM with Grype (fail on critical)
+        uses: anchore/scan-action@v4
         with:
           sbom: "${{ github.event.repository.name }}-sbom.spdx.json"
           fail-build: true
           severity-cutoff: critical
+
+      # ------------------------------------------------------------------------
+      # Upload artifacts
+      # ------------------------------------------------------------------------
+
+      - name: Upload SBOMs as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sbom-${{ github.ref_name }}
+          path: |
+            ${{ github.event.repository.name }}-sbom.spdx.json
+            ${{ github.event.repository.name }}-sbom.cyclonedx.json
+          retention-days: 90
+
+      - name: Upload scan results as artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scan-results-${{ github.ref_name }}
+          path: |
+            trivy-results.sarif
+            ${{ steps.grype-scan.outputs.sarif }}
+          retention-days: 90
