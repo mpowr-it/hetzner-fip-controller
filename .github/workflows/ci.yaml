@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     # Chainguard Go Build-Image (Align mit go 1.24)
     container:
-      image: cgr.dev/chainguard/go:1.24
+      image: cgr.dev/chainguard/go:latest
 
     steps:
       - name: Checkout repository
