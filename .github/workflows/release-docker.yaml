@@ -1,0 +1,113 @@
+name: Release Docker Image
+
+on:
+  push:
+    tags:
+      - "v*.*.*" # e.g. v1.2.3
+
+env:
+  IMAGE_NAME: mpowr/hetzner-fip-controller
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    container:
+      image: cgr.dev/chainguard/go:1.24
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Go version
+        run: go version
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Go build
+        run: go build ./...
+
+      - name: Go test
+        run: go test ./...
+
+  docker-release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            # Use the git tag itself (e.g. v1.2.3)
+            type=ref,event=tag
+            # Semantic version tags (v1.2.3 → 1.2.3, 1.2, 1)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Also publish "latest" for the newest tag
+            type=raw,value=latest
+
+      - name: Build and push Docker image (multi-arch)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # -------------------------------
+      # Security-Hardening
+      # -------------------------------
+
+      - name: Generate SBOM for released image (Syft via Anchore)
+        uses: anchore/sbom-action@v0
+        with:
+          # Docker Hub Image, use tag (eg. v1.2.3)
+          image: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          format: spdx-json
+          output-file: "${{ github.event.repository.name }}-sbom.spdx.json"
+          artifact-name: "sbom-${{ github.ref_name }}.spdx.json"
+
+      - name: Run Trivy vulnerability scanner (Docker Hub image)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: "docker.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+          format: "table"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan SBOM with Grype
+        uses: anchore/scan-action@v6
+        with:
+          sbom: "${{ github.event.repository.name }}-sbom.spdx.json"
+          fail-build: true
+          severity-cutoff: critical

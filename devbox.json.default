@@ -1,0 +1,88 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.16.0/.schema/devbox.schema.json",
+  "packages": {
+    "python":         "3.13.3",
+    "python313Packages.python-dateutil": "latest",
+    "pre-commit":     "3.7.1",
+    "go":             "1.24.0",
+    "golangci-lint":  "1.59.1",
+    "gofumpt":        "0.6.0",
+    "ripgrep":        "14.1.0",
+    "fzf":            "0.54.0",
+    "jq":             "1.7.1",
+    "tree":           "2.1.2",
+    "wget":           "1.24.5",
+    "curl":           "8.8.0",
+    "lazygit":        "0.43.1",
+    "gh":             "2.52.0",
+    "pstree":         "2.39",
+    "fping":          "5.2",
+    "glow":           "1.5.1",
+    "bat":            "0.24.0",
+    "moreutils":      "0.69",
+    "tmux":           "3.4",
+    "tmuxp":          "1.47.0",
+    "sops":           "3.9.0",
+    "netcat":         "3.9.2",
+    "commitizen":     "3.29.1",
+    "k9s":            "0.40.10",
+    "cosign":         "2.5.0",
+    "trivy":          "0.55.0",
+    "grype":          "0.81.0",
+    "netperf": {
+      "version":            "20210121",
+      "excluded_platforms": ["aarch64-darwin"]
+    }
+  },
+  "env": {
+    "POWERLEVEL9K_INSTANT_PROMPT":           "quiet",
+    "C_DBX_META_CONTEXT":                    "<YOUR-PROJECT-CONTEXT>",
+    "C_DBX_META_VERSION":                    "<YOUR-PROJECT-RELEASE>",
+    "C_DBX_META_TEAM":                       "<YOUR-PROJECT-TEAM>",
+    "C_DBX_META_TEAM_ID":                    "<YOUR-PROJECT-TEAM-ID>",
+    "C_DBX_META_TEAM_DESCRIPTION":           "<YOUR-PROJECT-DESCRIPTION>",
+    "C_DBX_META_PROJECT_ID":                 "HCLOUD-FIP-CTRL",
+    "C_DBX_META_PROJECT_ENV":                "dev",
+    "C_DBX_INIT_AWS_ACCOUNT_CURRENT":        "N/A",
+    "C_DBX_INIT_SESSION_NAME_2W":            "dbx_tmux_session_2w",
+    "C_DBX_INIT_SESSION_NAME_3W":            "dbx_tmux_session_3w",
+    "C_DBX_INIT_SESSION_FILE_MARKER":        ".devbox/.session_is_active",
+    "C_DBX_INIT_LOCAL_CONFIG_FILE_TEMPLATE": "devbox.json.default",
+    "C_DBX_INIT_LOCAL_CONFIG_FILE":          "devbox.json",
+    "GOTOOLCHAIN":                           "local",
+    "GOPATH":                                "$PWD/.devbox/gopath",
+    "GOMODCACHE":                            "$PWD/.devbox/gomodcache",
+    "GOBIN":                                 "$PWD/.devbox/gobin",
+    "PATH":                                  "$PWD/.devbox/gobin:$PATH"
+  },
+  "shell": {
+    "init_hook": [
+      "scripts/devbox/dbx_init.sh"
+    ],
+    "scripts": {
+      "help": [
+        "PAGER='bat' glow -p scripts/devbox/doc/dbx_main.md"
+      ],
+      "validate": [
+        "PAGER='bat' glow -p scripts/devbox/doc/dbx_module_missing.md"
+      ],
+      "sec-scan": [
+          "echo \"Running local security scan (Trivy + Grype) via Makefile ...\"",
+          "make docker-security"
+      ],
+      "img-scan": [
+        "echo \"Running local image CVE scan (Trivy only) via Makefile ...\"",
+        "make docker-scan-trivy"
+      ],
+      "img-build": [
+        "echo \"Building Docker image for local tests via Makefile ...\"",
+        "make docker-build"
+      ],
+      "init-pyenv": [
+        "echo \"Prepare pyenv and update dependencies for all modules ...\"",
+        "python -m venv ./env",
+        "source ./env/bin/activate"
+      ]
+    }
+  }
+}

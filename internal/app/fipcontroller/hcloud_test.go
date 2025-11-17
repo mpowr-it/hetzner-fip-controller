@@ -3,9 +3,9 @@ package fipcontroller
 import (
 	"context"
 	"encoding/json"
-	"github.com/cbeneke/hcloud-fip-controller/internal/pkg/configuration"
 	"github.com/hetznercloud/hcloud-go/hcloud"
 	"github.com/hetznercloud/hcloud-go/hcloud/schema"
+	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"net"
@@ -42,20 +42,20 @@ func (t testEnv) Teardown() {
 }
 
 func TestFloatingIPs(t *testing.T) {
-	tests := []struct{
-		name string
-		confFloatingIPs []string
+	tests := []struct {
+		name                         string
+		confFloatingIPs              []string
 		confFloatingIPsLabelSelector string
-		serverIPs []schema.FloatingIP
-		resultIPs []*hcloud.FloatingIP
-	} {
+		serverIPs                    []schema.FloatingIP
+		resultIPs                    []*hcloud.FloatingIP
+	}{
 		{
 			name: "successful simple case",
 			serverIPs: []schema.FloatingIP{
 				{
-					ID: 1,
+					ID:   1,
 					Type: "ipv4",
-					IP: "1.2.3.4",
+					IP:   "1.2.3.4",
 				},
 			},
 			resultIPs: []*hcloud.FloatingIP{
@@ -71,9 +71,9 @@ func TestFloatingIPs(t *testing.T) {
 			},
 			serverIPs: []schema.FloatingIP{
 				{
-					ID: 1,
+					ID:   1,
 					Type: "ipv4",
-					IP: "1.2.3.4",
+					IP:   "1.2.3.4",
 				},
 			},
 			resultIPs: []*hcloud.FloatingIP{
@@ -83,13 +83,13 @@ func TestFloatingIPs(t *testing.T) {
 			},
 		},
 		{
-			name: "successful label selector",
+			name:                         "successful label selector",
 			confFloatingIPsLabelSelector: "foob",
 			serverIPs: []schema.FloatingIP{
 				{
-					ID: 1,
+					ID:   1,
 					Type: "ipv4",
-					IP: "1.2.3.4",
+					IP:   "1.2.3.4",
 					Labels: map[string]string{
 						"foo": "bar",
 					},
@@ -115,15 +115,15 @@ func TestFloatingIPs(t *testing.T) {
 			})
 
 			controller := Controller{
-				HetznerClient:    testEnv.Client,
+				HetznerClient: testEnv.Client,
 				Backoff: wait.Backoff{
 					Steps: 1,
 				},
-				Configuration:    &configuration.Configuration{
+				Configuration: &configuration.Configuration{
 					FloatingIPLabelSelector: test.confFloatingIPsLabelSelector,
-					HcloudFloatingIPs: test.confFloatingIPs,
+					HcloudFloatingIPs:       test.confFloatingIPs,
 				},
-				Logger:           logrus.New(),
+				Logger: logrus.New(),
 			}
 
 			ps, err := controller.getFloatingIPs(context.Background())
@@ -159,14 +159,14 @@ func TestFloatingIPs(t *testing.T) {
 
 func TestFloatingIp(t *testing.T) {
 	tests := []struct {
-		name string
-		inputIP string
+		name      string
+		inputIP   string
 		serverIPs []schema.FloatingIP
-		err error
-		resultIP *hcloud.FloatingIP
+		err       error
+		resultIP  *hcloud.FloatingIP
 	}{
 		{
-			name: "test ipv4 successful",
+			name:    "test ipv4 successful",
 			inputIP: "1.2.3.4",
 			serverIPs: []schema.FloatingIP{
 				{
@@ -176,13 +176,13 @@ func TestFloatingIp(t *testing.T) {
 				},
 			},
 			resultIP: hcloud.FloatingIPFromSchema(schema.FloatingIP{
-				ID: 1,
+				ID:   1,
 				Type: "ipv4",
-				IP: "1.2.3.4",
+				IP:   "1.2.3.4",
 			}),
 		},
 		{
-			name: "test ipv6 successful",
+			name:    "test ipv6 successful",
 			inputIP: "2600::",
 			serverIPs: []schema.FloatingIP{
 				{
@@ -192,9 +192,9 @@ func TestFloatingIp(t *testing.T) {
 				},
 			},
 			resultIP: hcloud.FloatingIPFromSchema(schema.FloatingIP{
-				ID: 1,
+				ID:   1,
 				Type: "ipv6",
-				IP: "2600::",
+				IP:   "2600::",
 			}),
 		},
 	}
@@ -207,15 +207,15 @@ func TestFloatingIp(t *testing.T) {
 			testEnv.Mux.HandleFunc("/floating_ips", func(w http.ResponseWriter, r *http.Request) {
 				json.NewEncoder(w).Encode(schema.FloatingIPListResponse{
 					FloatingIPs: test.serverIPs,
-					})
+				})
 			})
 
 			controller := Controller{
-				HetznerClient:    testEnv.Client,
+				HetznerClient: testEnv.Client,
 				Backoff: wait.Backoff{
 					Steps: 1,
 				},
-				Logger:           logrus.New(),
+				Logger: logrus.New(),
 			}
 
 			ip, err := controller.floatingIP(context.Background(), test.inputIP)
@@ -232,7 +232,7 @@ func TestFloatingIp(t *testing.T) {
 				if test.resultIP == nil {
 					t.Fatalf("result should be [nil] but was [%d]", ip.ID)
 				}
-				if ip.ID != test.resultIP.ID  {
+				if ip.ID != test.resultIP.ID {
 					t.Fatalf("result should be [%d] but was [%d]", test.resultIP.ID, ip.ID)
 				}
 			}
@@ -241,12 +241,12 @@ func TestFloatingIp(t *testing.T) {
 }
 
 func TestServer(t *testing.T) {
-	tests := []struct{
-		name string
-		inputIPS [][]net.IP
-		servers []schema.Server
+	tests := []struct {
+		name          string
+		inputIPS      [][]net.IP
+		servers       []schema.Server
 		resultServers []*hcloud.Server
-		err error
+		err           error
 	}{
 		{
 			name: "test public ipv4 success",
@@ -308,7 +308,7 @@ func TestServer(t *testing.T) {
 			})
 
 			controller := Controller{
-				HetznerClient:    testEnv.Client,
+				HetznerClient: testEnv.Client,
 				Backoff: wait.Backoff{
 					Steps: 1,
 				},
@@ -345,4 +345,3 @@ func TestServer(t *testing.T) {
 		})
 	}
 }
-

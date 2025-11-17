@@ -8,8 +8,8 @@ import (
 
 	"github.com/namsral/flag"
 
-	"github.com/cbeneke/hcloud-fip-controller/internal/app/fipcontroller"
-	"github.com/cbeneke/hcloud-fip-controller/internal/pkg/configuration"
+	"github.com/mpowr/hetzner-fip-controller/internal/app/fipcontroller"
+	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 )
 
 func main() {

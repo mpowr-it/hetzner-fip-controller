@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/cbeneke/hcloud-fip-controller/internal/pkg/configuration"
+	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

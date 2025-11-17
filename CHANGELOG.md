@@ -1,38 +1,57 @@
-* v0.4.1
-  * Add a configurable backoff for all outgoing calls (#53)
-  * Update to go 1.15 (#53)
-  * Log now shows correct file and line number again (#53)
+# Changelog
+All notable changes to this project will be documented in this file.
 
-* v0.4.0
-  * **IMPORTANT** setting specific floating ips in config is now deprecated and will be removed soon. Please use floating ip label selector instead if only some ips should be used
-  * Ips will now get redistributed onto multiple nodes (#32)
-  * Hetzner floating ips can now be autodiscovered (#21)
-  * Add tests for all important functions (#6)
+This changelog follows [Semantic Versioning](https://semver.org/) and the
+[Keep a Changelog](https://keepachangelog.com/en/1.0.0/) conventions.
 
-* v0.3.5
-  * Leader election lease renew duration is now configurable (#49)
+Older upstream changes from the original `cbeneke/hcloud-fip-controller`
+project have intentionally been removed. This fork starts with
+`v1.0.0-RC.1`, representing the first maintained and enhanced release under
+the `mpowr-it/hetzner-fip-controller` project.
 
-* v0.3.4
-  * Fix error message outPut for undefined options (#46)
-  
-* v0.3.3
-  * Fix nilpointer deref on kubernetes v1.18.2 (#38)
+---
 
-* v0.3.2
-  * Fix parameter validation
+## [v1.0.0-RC.1] – 2025-11-17
+### Added
+- Initial maintained fork published under `mpowr/hetzner-fip-controller`.
+- GitHub Actions pipeline for CI:
+  - Go build & tests on all branches.
+  - Docker build validation on branch pushes.
+- GitHub Actions Release pipeline:
+  - Multi-arch Docker builds (amd64, arm64).
+  - Docker Hub push with semantic version tagging.
+  - Automatic `latest` tag on release.
 
-* v0.3.1
-  * Include internal Hetzner IPs in server to node matching (#25)
+### Changed
+- Removed legacy upstream CHANGELOG and all non-maintained version history.
+- Replaced upstream DockerHub integration with a new namespace
+  (`mpowr/hetzner-fip-controller`).
+- Updated repository structure and documentation to reflect active maintenance.
 
-* v0.3.0
-  * Restructured project layout (no intended functional changes)
+### Fixed
+- Eliminated hard process termination caused by transient Hetzner Cloud API
+  `503 Service Unavailable` errors (replaced `log.Fatal` crash behavior with
+  error logging and retry-friendly flow).
 
-* v0.2.1
-  * Added debug logs (disabled per default)
+### Improved
+- Modernized codebase scaffolding to support future enhancements such as:
+  - health/readiness endpoints,
+  - Prometheus metrics,
+  - improved retry/backoff logic,
+  - future controller-runtime migration.
 
-* v0.2.0
-  * Added minimal logging
-  * **IMPORTANT** config.json options switched from camelCase to snake_case
+---
 
-* v0.1.0
-  * Initial preview release
+## [Upcoming]
+(Planned changes for the next release)
+
+### Added
+- Health and readiness HTTP endpoints for liveness/readiness probes.
+- Retry/backoff subsystem for all Hetzner API calls.
+- Prometheus metrics endpoint (`/metrics`).
+
+### Changed
+- Align Dockerfile with current Go version (1.22+) and multi-stage build improvements.
+
+---
+

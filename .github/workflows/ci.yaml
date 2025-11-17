@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"          # Run on all branches
+  pull_request:
+    branches:
+      - main          # Validate PRs targeting main
+
+env:
+  IMAGE_NAME: mpowr/hetzner-fip-controller
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    # Chainguard Go Build-Image (Align mit go 1.24)
+    container:
+      image: cgr.dev/chainguard/go:1.24
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Go version
+        run: go version
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Go build
+        run: go build ./...
+
+      - name: Go test
+        run: go test ./...
+
+  docker-build:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    # Do not build Docker images for pull requests; only validate code there.
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # No login, no push here
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_NAME }}:ci

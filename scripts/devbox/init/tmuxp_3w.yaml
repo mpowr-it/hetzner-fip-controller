@@ -1,0 +1,22 @@
+#
+# TMUX-Profile Configuration
+# @version 1.0.0
+# @see: https://tmuxp.git-pull.com/configuration/examples.html
+# --
+session_name: $C_DBX_INIT_SESSION_NAME_3W
+suppress_history: false
+environment:
+  PAGER: bat
+windows:
+  - window_name: devbox-tmux-test
+    focus: True
+    layout: main-horizontal
+    options:
+      main-pane-height: 80%
+      automatic-rename: on
+    panes:
+      - # primary page, no command or setup required!
+      - shell_command: # 1st tunnel-terminal session (e.g. for proxy-con to infra ice-api)
+        - clear
+      - shell_command: # 2nd tunnel-terminal session (e.g. for proxy-con to edp k8s-ctrl)
+        - clear

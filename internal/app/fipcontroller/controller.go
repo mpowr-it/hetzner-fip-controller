@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/cbeneke/hcloud-fip-controller/internal/pkg/configuration"
+	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 )
 
 // Controller is the main struct used for all other functions in this package.

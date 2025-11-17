@@ -1,0 +1,31 @@
+# VCS
+.git
+.gitignore
+
+# Devbox / Nix
+.devbox/
+
+# Go build output
+bin/
+*.exe
+*.test
+*.out
+
+# Build artifacts
+dist/
+build/
+coverage.out
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS / misc
+.DS_Store
+Thumbs.db
+
+# Docker / compose leftovers
+Dockerfile~
+docker-compose.yml~

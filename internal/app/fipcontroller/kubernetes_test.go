@@ -3,7 +3,7 @@ package fipcontroller
 import (
 	"context"
 	"fmt"
-	"github.com/cbeneke/hcloud-fip-controller/internal/pkg/configuration"
+	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -216,7 +216,7 @@ func TestPodLabelSelector(t *testing.T) {
 					},
 				},
 			},
-			resultString: []string{"foo=bar","bar=foo"},
+			resultString: []string{"foo=bar", "bar=foo"},
 		},
 		{
 			name:    "test successful find pod no labels",
