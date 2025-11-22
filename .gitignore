@@ -22,5 +22,8 @@ bin/
 # config files
 config/config.json
 
+# golang specific additions
+.gocache/**e
+
 # others
 .venv/

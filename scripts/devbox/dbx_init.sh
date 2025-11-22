@@ -12,13 +12,29 @@ C_DBX_INIT_ENTRYPOINT="dbx_init.sh"
 # export PYTHONWARNINGS="ignore::CryptographyDeprecationWarning"
 
 #
+# determine project root (used for all project-local paths)
+# try (in order): existing var, DEVBOX_PROJECT_ROOT, git root, current dir
+#
+if [ -z "${C_DBX_PROJECT_ROOT:-}" ]; then
+  if [ -n "${DEVBOX_PROJECT_ROOT:-}" ]; then
+    C_DBX_PROJECT_ROOT="$DEVBOX_PROJECT_ROOT"
+  elif command -v git >/dev/null 2>&1 && git rev-parse --show-toplevel >/dev/null 2>&1; then
+    C_DBX_PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+  else
+    C_DBX_PROJECT_ROOT="$(pwd)"
+  fi
+fi
+export C_DBX_PROJECT_ROOT
+
+#
 # constants : project-local paths for Go build artifacts and cache
+#   => IMPORTANT: no longer inside .devbox (read-only), use project-local .gocache directory
 # --
-export GOPATH="${C_DBX_PROJECT_ROOT}/.devbox/gopath"
-export GOMODCACHE="${C_DBX_PROJECT_ROOT}/.devbox/gomodcache"
-export GOBIN="${C_DBX_PROJECT_ROOT}/.devbox/gobin"
+export GOPATH="${C_DBX_PROJECT_ROOT}/.gocache/gopath"
+export GOMODCACHE="${C_DBX_PROJECT_ROOT}/.gocache/gomodcache"
+export GOBIN="${C_DBX_PROJECT_ROOT}/.gocache/gobin"
 export PATH="$GOBIN:$PATH"
-export GOTOOLCHAIN=locale
+export GOTOOLCHAIN=local
 #
 # function: check baseline configuration and tool/package availability
 # --
@@ -59,9 +75,11 @@ init_check() {
   # echo "◼︎ check : init os-related bootstrap scripts at [./${C_DBX_INIT_PATH}] for [${C_DBX_OS}] ✔"
 
   #
-  # prepare some golang related stuff
-  # --
-  mkdir -p "$GOPATH" "$GOMODCACHE" "$GOBIN"
+  # prepare golang directories (always writeable, always project-local)
+  #
+  mkdir -p "$GOPATH" "$GOMODCACHE" "$GOBIN" 2>/dev/null || {
+    printf '◼︎ warn : could not create Go cache dirs under %s (permissions?)\n' "$C_DBX_PROJECT_ROOT" >&2
+  }
 }
 
 #

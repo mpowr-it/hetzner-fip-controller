@@ -25,22 +25,40 @@ DOCKER_FILE   ?= ./Dockerfile
 DOCKER_CTX    ?= .
 
 # ------------------------------------------------------------------------------
+# Go environment (project-local caches, independent from .devbox/Nix internals)
+# ------------------------------------------------------------------------------
+
+export GOPATH      := $(CURDIR)/.gocache/gopath
+export GOMODCACHE  := $(CURDIR)/.gocache/gomodcache
+export GOBIN       := $(CURDIR)/.gocache/gobin
+export PATH        := $(GOBIN):$(PATH)
+export GOTOOLCHAIN := local
+
+# ------------------------------------------------------------------------------
 # Meta targets
 # ------------------------------------------------------------------------------
 
 .PHONY: all build test run lint fmt tidy vet ci clean tree \
         docker-build docker-run docker-shell docker-shell-builder \
-        docker-scan-trivy docker-scan-grype docker-security
+        docker-scan-trivy docker-scan-grype docker-security \
+        prepare-go
 
 all: fmt lint test build
 
 ci: fmt lint test
 
 # ------------------------------------------------------------------------------
+# Internal helpers
+# ------------------------------------------------------------------------------
+
+prepare-go:
+	@mkdir -p "$(GOPATH)" "$(GOMODCACHE)" "$(GOBIN)"
+
+# ------------------------------------------------------------------------------
 # Build targets
 # ------------------------------------------------------------------------------
 
-build:
+build: prepare-go
 	@mkdir -p "$(BIN_DIR)"
 	$(GO) build -o "$(BINARY)" $(PKG_MAIN)
 	@echo "✔ Build complete → $(BINARY)"
@@ -58,7 +76,7 @@ fmt:
 lint:
 	$(GOLANGCI_LINT) run
 
-test:
+test: prepare-go
 	$(GO) test -v ./...
 
 tidy:
