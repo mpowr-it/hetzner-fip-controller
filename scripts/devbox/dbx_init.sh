@@ -1,132 +1,191 @@
 #!/usr/bin/env bash
 # --
-# @version: 1.0.0
-# @purpose: Shell script to run when an interactive devbox shell is started (golang related).
+# @version: 2.3.0
+# @purpose: Devbox initialization with status matrix focusing on Claude CLI.
 # --
 
-#
-# constants: internals
-# --
-C_DBX_INIT_PATH_ROOT="scripts/devbox/init"
+set -euo pipefail
+
+# --------------------------------------------------------------------
+# Constants / metadata
+# --------------------------------------------------------------------
+# Important: paths are relative to repo root
+C_DBX_INIT_PATH_ROOT="scripts/devbox"
 C_DBX_INIT_ENTRYPOINT="dbx_init.sh"
-# export PYTHONWARNINGS="ignore::CryptographyDeprecationWarning"
 
-#
-# determine project root (used for all project-local paths)
-# try (in order): existing var, DEVBOX_PROJECT_ROOT, git root, current dir
-#
-if [ -z "${C_DBX_PROJECT_ROOT:-}" ]; then
-  if [ -n "${DEVBOX_PROJECT_ROOT:-}" ]; then
-    C_DBX_PROJECT_ROOT="$DEVBOX_PROJECT_ROOT"
-  elif command -v git >/dev/null 2>&1 && git rev-parse --show-toplevel >/dev/null 2>&1; then
-    C_DBX_PROJECT_ROOT="$(git rev-parse --show-toplevel)"
-  else
-    C_DBX_PROJECT_ROOT="$(pwd)"
-  fi
+# Devbox / project metadata (can be overridden from env)
+C_DBX_META_TEAM="${C_DBX_META_TEAM:-MPOWR-IT}"
+C_DBX_META_TEAM_ID="${C_DBX_META_TEAM_ID:-hetzner-fip-controller}"
+C_DBX_META_VERSION="${C_DBX_META_VERSION:-$(cat VERSION 2>/dev/null || echo "dev")}"
+
+# --------------------------------------------------------------------
+# Minimal colors & icon themes
+# --------------------------------------------------------------------
+# export DBX_ICON_SET=ascii    # or: ticks / blocks
+# export DBX_NO_COLOR=1        # monochrome
+# --------------------------------------------------------------------
+
+: "${DBX_ICON_SET:=ticks}"   # ascii | ticks | blocks
+: "${DBX_NO_COLOR:=0}"
+
+if [ "${DBX_NO_COLOR}" = "1" ]; then
+  GREEN=""; RED=""; YELLOW=""; BLUE=""; GREY=""; BOLD=""; RESET=""
+else
+  GREEN="\033[32m"; RED="\033[31m"; YELLOW="\033[33m"; BLUE="\033[34m"; GREY="\033[90m"; BOLD="\033[1m"; RESET="\033[0m"
 fi
-export C_DBX_PROJECT_ROOT
 
-#
-# constants : project-local paths for Go build artifacts and cache
-#   => IMPORTANT: no longer inside .devbox (read-only), use project-local .gocache directory
-# --
-export GOPATH="${C_DBX_PROJECT_ROOT}/.gocache/gopath"
-export GOMODCACHE="${C_DBX_PROJECT_ROOT}/.gocache/gomodcache"
-export GOBIN="${C_DBX_PROJECT_ROOT}/.gocache/gobin"
-export PATH="$GOBIN:$PATH"
-export GOTOOLCHAIN=local
-#
-# function: check baseline configuration and tool/package availability
-# --
+declare -A STATUS
+
+record_ok()   { STATUS["$1"]="OK|$2"; }
+record_fail() { STATUS["$1"]="FAIL|$2"; }
+record_warn() { STATUS["$1"]="WARN|$2"; }
+
+_icon_for() {
+  case "${DBX_ICON_SET}:${1}" in
+    ascii:OK)   echo "OK"  ;;
+    ascii:FAIL) echo "ERR" ;;
+    ascii:WARN) echo "WRN" ;;
+    ticks:OK)   echo "✓"   ;;
+    ticks:FAIL) echo "✗"   ;;
+    ticks:WARN) echo "!"   ;;
+    blocks:OK)  echo "■"   ;;
+    blocks:FAIL)echo "■"   ;;
+    blocks:WARN)echo "■"   ;;
+    *)          echo "${1}" ;;
+  esac
+}
+
+_color_for() {
+  case "$1" in
+    OK)   echo "${GREEN}"  ;;
+    FAIL) echo "${RED}"    ;;
+    WARN) echo "${YELLOW}" ;;
+    *)    echo "${GREY}"   ;;
+  esac
+}
+
+# --------------------------------------------------------------------
+# Core checks
+# --------------------------------------------------------------------
 init_check() {
-
-  # @info: this os identification process will be used later to provide additional init-scripts based on your os
-  unameOut=$(uname -a)
+  local unameOut; unameOut="$(uname -a)"
   case "${unameOut}" in
-    *Microsoft*)  C_DBX_OS="WSL"     ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_win64wsl" ;;
-    *microsoft*)  C_DBX_OS="WSL2"    ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_win64wsl" ;;
-    Linux*)       C_DBX_OS="Linux"   ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_linux"    ;;
-    Darwin*)      C_DBX_OS="Mac"     ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_darwin"   ;;
-    CYGWIN*)      C_DBX_OS="Cygwin"  ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_win64"    ;;
-    MINGW*)       C_DBX_OS="Windows" ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_win64"    ;;
-    *Msys)        C_DBX_OS="Windows" ; C_DBX_INIT_PATH="${C_DBX_INIT_PATH_ROOT}/os_win64"    ;;
-    *)            C_DBX_OS="???:${unameOut}"
+    *Microsoft*)  C_DBX_OS="WSL"     ;;
+    *microsoft*)  C_DBX_OS="WSL2"    ;;
+    Linux*)       C_DBX_OS="Linux"   ;;
+    Darwin*)      C_DBX_OS="Mac"     ;;
+    CYGWIN*)      C_DBX_OS="Cygwin"  ;;
+    MINGW*|*Msys) C_DBX_OS="Windows" ;;
+    *)            C_DBX_OS="Unknown" ;;
   esac
 
-  echo "------------------------------------------------------------------------------------------------------------------";
-  echo "Welcome to ${C_DBX_META_TEAM}/${C_DBX_META_TEAM_ID} DevBox-Shell v${C_DBX_META_VERSION} | See DEVBOX.md for tips and tasks on using this terminal ...";
-  echo "------------------------------------------------------------------------------------------------------------------";
-  #
-  # check devbox core requirements and differ between project and standalone mode
-  # --
-  if [ ! -f "$C_DBX_INIT_PATH_ROOT/../$C_DBX_INIT_ENTRYPOINT" ]
-  then
-    echo "ERROR : devbox init-path not found, therefore devbox couldn't bootstrap baseline config. Check devbox integration first!"
-    echo "LINK  : https://gitlab.bare.pandrosion.org/edp/infrastructure/cloud/managed-gcp/cloud-mgmt/ops-devbox-shell"
+  # check that we are in repo root (or at least that the init script exists)
+  if [ ! -f "$C_DBX_INIT_PATH_ROOT/$C_DBX_INIT_ENTRYPOINT" ]; then
+    echo -e "${RED}${BOLD}ERROR${RESET}: Devbox init path missing. Run from repo root or fix C_DBX_INIT_PATH_ROOT."
     exit 1
+  fi
+}
+
+# --------------------------------------------------------------------
+# PATH sanity (npm global bin)
+# --------------------------------------------------------------------
+init_path_sanity() {
+  if command -v npm >/dev/null 2>&1; then
+    local npm_prefix npm_bin
+    npm_prefix="$(npm config get prefix 2>/dev/null || true)"
+    if [ -n "$npm_prefix" ] && [ -d "$npm_prefix/bin" ]; then
+      npm_bin="${npm_prefix}/bin"
+    fi
+    if [ -z "${npm_bin:-}" ] && [ -d "${HOME}/.npm-global/bin" ]; then
+      npm_bin="${HOME}/.npm-global/bin"
+    fi
+    if [ -n "${npm_bin:-}" ] && [[ ":$PATH:" != *":${npm_bin}:"* ]]; then
+      export PATH="${npm_bin}:$PATH"
+    fi
+    record_ok "npm-path" "global bin on PATH"
   else
-    echo "◼︎ check : devbox init script available ✔︎"
+    record_warn "npm-path" "npm missing (Claude CLI install needs Node)"
   fi
-
-  # ***
-  # *** @TBD: add os specific init scripts (currently not implemented yet)
-  # ***
-  # --
-  # echo "◼︎ check : init os-related bootstrap scripts at [./${C_DBX_INIT_PATH}] for [${C_DBX_OS}] ✔"
-
-  #
-  # prepare golang directories (always writeable, always project-local)
-  #
-  mkdir -p "$GOPATH" "$GOMODCACHE" "$GOBIN" 2>/dev/null || {
-    printf '◼︎ warn : could not create Go cache dirs under %s (permissions?)\n' "$C_DBX_PROJECT_ROOT" >&2
-  }
 }
 
-#
-# function: print out some useful information after devbox init-phase
-# --
-init_print_help () {
-  echo "------------------------------------------------------------------------------------------------------------------";
-  echo "Available scripts (excerpt)"
-  echo "------------------------------------------------------------------------------------------------------------------";
-  echo "$ devbox run validate    | validate local dev environment for all requirements"
-  echo "$ devbox run sec-scan    | start a complete security scan for this app-stack (incl. secret-exposure check)"
-  echo "$ devbox run img-scan    | start CVE testing/scanning for all app-stack images"
-  echo "$ devbox run img-build   | build all app-stack images for local testing"
-  echo "$ devbox run init-pyenv  | initialize a dedicated python3 environment (experimental featuren not required anymore)"
-  echo "$ devbox run help        | print out devbox project documentation, show/describe all scripts available"
-  echo "------------------------------------------------------------------------------------------------------------------";
-  echo "type 'devbox run help' (or <your-dbx-run-alias> help) to show scripts/doc/dbx_main.md devbox-shell documentation"
-  echo "type 'exit' to close this shell and return to your os-source terminal | os-shell"
-  if [ -f "$C_DBX_INIT_SESSION_FILE_MARKER" ]; then
-    echo "------------------------------------------------------------------------------------------------------------------";
-    echo -e "You are in an active tmux session; use tmux-command (\033[37mcontrol+b\033[0m) <\033[34marrow-up\033[0m>|<\033[34marrow-down\033[0m> to switch between your"
-    echo "active panes. The first pane will be on the top of your screen and handle all devbox shell commands. The second"
-    echo "and 3rd pane will be on the bottom you your screen and handle tunnel-connection to ice-api & k8s-api etc."
+# --------------------------------------------------------------------
+# Claude CLI + key
+# --------------------------------------------------------------------
+init_claude() {
+  export CLAUDE_MODEL="${CLAUDE_MODEL:-claude-3-7-sonnet}"
+
+  if command -v claude >/dev/null 2>&1; then
+    record_ok "claude-cli" "installed"
+  else
+    if command -v npm >/dev/null 2>&1; then
+      npm config set prefix "${HOME}/.npm-global" >/dev/null 2>&1 || true
+      mkdir -p "${HOME}/.npm-global/bin"
+      export PATH="${HOME}/.npm-global/bin:$PATH"
+      npm i -g @anthropic-ai/cli >/dev/null 2>&1 || true
+
+      if command -v claude >/dev/null 2>&1; then
+        record_ok "claude-cli" "installed"
+      else
+        record_fail "claude-cli" "install failed (npm i -g @anthropic-ai/cli)"
+      fi
+    else
+      record_fail "claude-cli" "npm missing"
+    fi
   fi
-  if cmp --silent -- $C_DBX_INIT_LOCAL_CONFIG_FILE $C_DBX_INIT_LOCAL_CONFIG_FILE_TEMPLATE ; then
-      echo -e "\033[0m------------------------------------------------------------------------------------------------------------------"
-      echo -e "\033[33m@INFO\033[0m: Currently you are using a simple copy of the default configuration for this devbox shell."
-      echo -e "You can make your own adjustments to the resulting '\033[34m$C_DBX_INIT_LOCAL_CONFIG_FILE\033[0m' file at any time to"
-      echo -e "customise the shell according to your needs. Check official reference information at:"
-      echo -e "\033[37mhttps://www.jetify.com/devbox/docs/configuration/\033[0m"
-      echo -e "\033[0m------------------------------------------------------------------------------------------------------------------"
+
+  if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    record_ok "anthropic-key" "present"
+  else
+    record_warn "anthropic-key" "missing"
   fi
-  echo -e "\n"
 }
 
-init_pyenv () {
-  echo "------------------------------------------------------------------------------------------------------------------";
-  echo "Activate Python3 vENV"
-  echo "------------------------------------------------------------------------------------------------------------------";
-  python3 -m venv .venv
-  source .venv/bin/activate
+# --------------------------------------------------------------------
+# Matrix renderer
+# --------------------------------------------------------------------
+print_matrix() {
+  echo
+  echo -e "${BOLD}Devbox — ${C_DBX_META_TEAM}/${C_DBX_META_TEAM_ID} v${C_DBX_META_VERSION}${RESET} [${C_DBX_OS}]"
+  echo "──────────────────────────────────────────────────────────────"
+  printf "%-14s  %-3s  %s\n" "Component" "St" "Notes"
+  echo "──────────────────────────────────────────────────────────────"
+
+  for key in npm-path claude-cli anthropic-key; do
+    if [[ -n "${STATUS[$key]:-}" ]]; then
+      local code note icon color
+      IFS='|' read -r code note <<< "${STATUS[$key]}"
+      icon="$(_icon_for "${code}")"
+      color="$(_color_for "${code}")"
+      if [ "${DBX_NO_COLOR}" = "1" ]; then
+        printf "%-14s  %-3s  %s\n" "$key" "$icon" "$note"
+      else
+        printf "%-14s  %b%-3s%b  %s\n" "$key" "$color" "$icon" "$RESET" "$note"
+      fi
+    fi
+  done
+
+  echo "──────────────────────────────────────────────────────────────"
 }
 
-#
-# shell entrypoint(s)
-# --
+# --------------------------------------------------------------------
+# Help (compact, Claude-focused)
+# --------------------------------------------------------------------
+print_help() {
+  echo -e "${BLUE}${BOLD}Shortcuts (devbox run)<${RESET}"
+  echo "  ai-chat         Claude chat (interactive)"
+  echo "  ai-ask          Claude one-shot question"
+  echo "  ai-chat-sys     Claude chat with CLAUDE.md as system prompt"
+  echo "  ai-ask-file     Claude ask with attached file"
+  echo
+  echo "Adjust these names to match your devbox.json \"scripts\" if needed."
+}
 
+# --------------------------------------------------------------------
+# Entry
+# --------------------------------------------------------------------
 init_check
-init_print_help
+init_path_sanity
+init_claude
 
+print_matrix
+print_help
