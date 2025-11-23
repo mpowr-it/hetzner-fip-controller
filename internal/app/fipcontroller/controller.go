@@ -72,23 +72,40 @@ func NewController(config *configuration.Configuration) (*Controller, error) {
 	}, nil
 }
 
-// Run updates Floating IPs once initially and every 30s afterwards
-//
-// === Main Thread ===
+// Run executes the reconciliation loop once this controller instance
+// becomes the elected leader. The loop must never kill the process due to
+// transient runtime errors (e.g. Hetzner API 503, network issues).
+// --
+// Returning errors here would bubble up into the leader election logic,
+// causing Fatalf() → os.Exit(1) → CrashLoopBackoff. Therefore, errors
+// are logged but the loop continues running.
 func (controller *Controller) Run(ctx context.Context) error {
+
+	// Initial reconciliation attempt.
+	// Any failure here is logged but not treated as fatal.
 	if err := controller.UpdateFloatingIPs(ctx); err != nil {
-		return err
+		controller.Logger.WithError(err).Error("initial reconciliation failed")
+	} else {
+		controller.Logger.Info("Initialization complete. Starting reconciliation")
 	}
-	controller.Logger.Info("Initialization complete. Starting reconciliation")
+
+	// Execute periodic reconciliation.
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
+
+		// Normal shutdown path when the leader election context is cancelled.
 		case <-ctx.Done():
-			controller.Logger.Info("Context Done. Shutting down")
+			controller.Logger.Info("Context canceled, shutting down controller")
 			return nil
-		case <-time.After(30 * time.Second):
+
+		// Main reconcile interval.
+		case <-ticker.C:
+			// Never return an error from here — it would cause a fatal exit.
 			if err := controller.UpdateFloatingIPs(ctx); err != nil {
-				return err
+				controller.Logger.WithError(err).Error("reconciliation failed")
 			}
 		}
 	}

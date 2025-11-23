@@ -50,14 +50,22 @@ func (controller *Controller) RunWithLeaderElection(ctx context.Context) {
 	}
 }
 
+// onStartedLeading is called once this instance becomes the leader.
+// Any unexpected error from Run() should be logged, not fatal, in order
+// to avoid controller CrashLoopBackoff on transient API or network issues.
 func (controller *Controller) onStartedLeading(ctx context.Context) {
 	controller.Logger.Info("Started leading")
-	err := controller.Run(ctx)
-	if err != nil {
-		controller.Logger.Fatalf("Could not run controller: %v", err)
+
+	// Run the main reconciliation loop.
+	// Run() should normally only return when the context is cancelled.
+	if err := controller.Run(ctx); err != nil {
+		// Do not call Fatalf here — that would kill the process and trigger a pod restart.
+		// We only log the error and allow the manager lifecycle to continue gracefully.
+		controller.Logger.WithError(err).Error("controller exited with an unexpected error")
 	}
 }
 
+// onStoppedLeading is called when leadership is lost.
 func (controller *Controller) onStoppedLeading() {
 	controller.Logger.Info("Stopped leading")
 }
