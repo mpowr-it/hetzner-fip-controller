@@ -39,3 +39,4 @@ config/config.json
 
 # Claude related files + directories
 /CLAUDE.md
+.claude/*
