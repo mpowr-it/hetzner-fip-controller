@@ -3,6 +3,9 @@ package fipcontroller
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"testing"
+
 	"github.com/hetznercloud/hcloud-go/hcloud/schema"
 	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 	"github.com/sirupsen/logrus"
@@ -11,8 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/fake"
-	"net/http"
-	"testing"
 )
 
 func TestUpdateFloatingIPs(t *testing.T) {
@@ -182,7 +183,6 @@ func TestUpdateFloatingIPs(t *testing.T) {
 			}
 
 			err := controller.UpdateFloatingIPs(context.Background())
-
 			if err != nil {
 				t.Fatalf("Err should be [nil] but was %v", err)
 			}

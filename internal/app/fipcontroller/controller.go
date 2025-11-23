@@ -80,7 +80,6 @@ func NewController(config *configuration.Configuration) (*Controller, error) {
 // causing Fatalf() → os.Exit(1) → CrashLoopBackoff. Therefore, errors
 // are logged but the loop continues running.
 func (controller *Controller) Run(ctx context.Context) error {
-
 	// Initial reconciliation attempt.
 	// Any failure here is logged but not treated as fatal.
 	if err := controller.UpdateFloatingIPs(ctx); err != nil {
@@ -157,10 +156,14 @@ func (controller *Controller) UpdateFloatingIPs(ctx context.Context) error {
 				return err
 			})
 			if err != nil {
-				return fmt.Errorf("could not update floating IP '%s': %v", floatingIP.IP.String(), err)
+				// Log the error and continue with next floating IP instead of failing the entire reconciliation
+				controller.Logger.WithError(err).Errorf("could not update floating IP '%s'", floatingIP.IP.String())
+				continue
 			}
 			if response.StatusCode != 201 {
-				return fmt.Errorf("could not update floating IP '%s': Got HTTP Code %d, expected 201", floatingIP.IP.String(), response.StatusCode)
+				// Log the error and continue with next floating IP instead of failing the entire reconciliation
+				controller.Logger.Errorf("could not update floating IP '%s': Got HTTP Code %d, expected 201", floatingIP.IP.String(), response.StatusCode)
+				continue
 			}
 			// Add placeholder floating ip to server so that findServerWithLowestFIP will always get a correct server
 			server.PublicNet.FloatingIPs = append(server.PublicNet.FloatingIPs, &hcloud.FloatingIP{})
