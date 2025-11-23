@@ -27,3 +27,15 @@ config/config.json
 
 # others
 .venv/
+
+# Taskmaster outputs (generated files)
+.taskmaster/out/
+.taskmaster/logs/
+.taskmaster/cache/
+
+# But keep config files tracked
+!taskmaster.config.yaml
+!taskmaster.plan.json
+
+# Claude related files + directories
+/CLAUDE.md
