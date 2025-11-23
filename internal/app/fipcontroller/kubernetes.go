@@ -3,9 +3,10 @@ package fipcontroller
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/util/retry"
 	"net"
 	"strings"
+
+	"k8s.io/client-go/util/retry"
 
 	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 

@@ -3,17 +3,18 @@ package fipcontroller
 import (
 	"context"
 	"encoding/json"
-	"github.com/hetznercloud/hcloud-go/hcloud"
-	"github.com/hetznercloud/hcloud-go/hcloud/schema"
-	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
-	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/hetznercloud/hcloud-go/hcloud"
+	"github.com/hetznercloud/hcloud-go/hcloud/schema"
+	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type testEnv struct {
@@ -127,7 +128,6 @@ func TestFloatingIPs(t *testing.T) {
 			}
 
 			ps, err := controller.getFloatingIPs(context.Background())
-
 			if err != nil {
 				t.Fatalf("Error should be [nil] but was %v", err)
 			}

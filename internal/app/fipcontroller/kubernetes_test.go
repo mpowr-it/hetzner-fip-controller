@@ -3,6 +3,11 @@ package fipcontroller
 import (
 	"context"
 	"fmt"
+	"net"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/mpowr/hetzner-fip-controller/internal/pkg/configuration"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -10,10 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/fake"
-	"net"
-	"reflect"
-	"strings"
-	"testing"
 )
 
 func createTestNode(nodeName string, addressList []v1.NodeAddress, nodeReady v1.ConditionStatus) *v1.Node {
