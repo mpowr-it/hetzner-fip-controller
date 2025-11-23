@@ -118,26 +118,36 @@ func (controller *Controller) UpdateFloatingIPs(ctx context.Context) error {
 	// Get running servers for floating ip assignment
 	nodeAddressList, err := controller.nodeAddressList(ctx, controller.Configuration.NodeAddressType)
 	if err != nil {
-		return fmt.Errorf("could not get addressList for active kubernetes nodes: %v", err)
+		controller.Logger.WithError(err).Error("could not get addressList for active kubernetes nodes")
+		return nil // Continue reconciliation loop despite this error
 	}
 
 	if nodeAddressList == nil || len(nodeAddressList) < 1 {
-		return fmt.Errorf("could not find any ips")
+		controller.Logger.Error("could not find any ips")
+		return nil // Continue reconciliation loop despite this error
 	}
 
 	runningServers, err := controller.servers(ctx, nodeAddressList)
 	if err != nil {
-		return fmt.Errorf("could not get server objects for addressList: %v", err)
+		controller.Logger.WithError(err).Error("could not get server objects for addressList")
+		return nil // Continue reconciliation loop despite this error
 	}
 
 	if runningServers == nil || len(runningServers) < 1 {
-		return fmt.Errorf("no server objects were found")
+		controller.Logger.Error("no server objects were found")
+		return nil // Continue reconciliation loop despite this error
 	}
 
 	// Get floatingIPs from config if specified, otherwise from hetzner api
 	floatingIPs, err := controller.getFloatingIPs(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get floatingIPs: %v", err)
+		controller.Logger.WithError(err).Error("could not get floatingIPs")
+		return nil // Continue reconciliation loop despite this error
+	}
+
+	if len(floatingIPs) == 0 {
+		controller.Logger.Debug("no floating IPs to process")
+		return nil
 	}
 
 	for _, floatingIP := range floatingIPs {
