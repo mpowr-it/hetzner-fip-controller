@@ -123,22 +123,22 @@ func (controller *Controller) UpdateFloatingIPs(ctx context.Context) error {
 	}
 
 	if nodeAddressList == nil || len(nodeAddressList) < 1 {
-		return fmt.Errorf("Could not find any ips")
+		return fmt.Errorf("could not find any ips")
 	}
 
 	runningServers, err := controller.servers(ctx, nodeAddressList)
 	if err != nil {
-		return fmt.Errorf("Could not get server objects for addressList: %v", err)
+		return fmt.Errorf("could not get server objects for addressList: %v", err)
 	}
 
 	if runningServers == nil || len(runningServers) < 1 {
-		return fmt.Errorf("No server objects were found")
+		return fmt.Errorf("no server objects were found")
 	}
 
 	// Get floatingIPs from config if specified, otherwise from hetzner api
 	floatingIPs, err := controller.getFloatingIPs(ctx)
 	if err != nil {
-		return fmt.Errorf("Could not get floatingIPs: %v", err)
+		return fmt.Errorf("could not get floatingIPs: %v", err)
 	}
 
 	for _, floatingIP := range floatingIPs {
