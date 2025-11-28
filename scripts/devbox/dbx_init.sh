@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # --
-# @version: 2.3.0
+# @version: 2.4.0
 # @purpose: Devbox initialization with status matrix focusing on Claude CLI.
 # --
 
@@ -109,11 +109,13 @@ init_path_sanity() {
 }
 
 # --------------------------------------------------------------------
-# Claude CLI + key
+# Claude CLI + key + auth hint
 # --------------------------------------------------------------------
 init_claude() {
+  # Default model for local one-off usage; Claude Code itself manages models via /model
   export CLAUDE_MODEL="${CLAUDE_MODEL:-claude-3-7-sonnet}"
 
+  # 1) CLI presence / installation
   if command -v claude >/dev/null 2>&1; then
     record_ok "claude-cli" "installed"
   else
@@ -121,22 +123,35 @@ init_claude() {
       npm config set prefix "${HOME}/.npm-global" >/dev/null 2>&1 || true
       mkdir -p "${HOME}/.npm-global/bin"
       export PATH="${HOME}/.npm-global/bin:$PATH"
-      npm i -g @anthropic-ai/cli >/dev/null 2>&1 || true
+      npm i -g @anthropic-ai/claude-code >/dev/null 2>&1 || true
 
       if command -v claude >/dev/null 2>&1; then
         record_ok "claude-cli" "installed"
       else
-        record_fail "claude-cli" "install failed (npm i -g @anthropic-ai/cli)"
+        record_fail "claude-cli" "install failed (npm i -g @anthropic-ai/claude-code)"
       fi
     else
       record_fail "claude-cli" "npm missing"
     fi
   fi
 
+  # 2) API key presence
   if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     record_ok "anthropic-key" "present"
   else
-    record_warn "anthropic-key" "missing"
+    record_warn "anthropic-key" "missing (CLI can still use Claude Max / Pro login)"
+  fi
+
+  # 3) Auth mode hint (Max vs API) – we cannot detect it programmatically,
+  #    so we print a clear hint if both CLI and key exist.
+  if command -v claude >/dev/null 2>&1; then
+    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+      record_warn "claude-auth" "API key set; Claude Code may still use subscription login. Run 'claude' + '/status' to check 'Login Method'."
+    else
+      record_ok "claude-auth" "no API key; Claude Code will use your interactive login (Max/Pro/API)."
+    fi
+  else
+    record_warn "claude-auth" "Claude CLI not available, cannot determine auth behavior."
   fi
 }
 
@@ -150,7 +165,8 @@ print_matrix() {
   printf "%-14s  %-3s  %s\n" "Component" "St" "Notes"
   echo "──────────────────────────────────────────────────────────────"
 
-  for key in npm-path claude-cli anthropic-key; do
+  # order of rows in matrix
+  for key in npm-path claude-cli anthropic-key claude-auth; do
     if [[ -n "${STATUS[$key]:-}" ]]; then
       local code note icon color
       IFS='|' read -r code note <<< "${STATUS[$key]}"
@@ -171,11 +187,15 @@ print_matrix() {
 # Help (compact, Claude-focused)
 # --------------------------------------------------------------------
 print_help() {
-  echo -e "${BLUE}${BOLD}Shortcuts (devbox run)<${RESET}"
+  echo -e "${BLUE}${BOLD}Shortcuts (devbox run)${RESET}"
   echo "  ai-chat         Claude chat (interactive)"
   echo "  ai-ask          Claude one-shot question"
   echo "  ai-chat-sys     Claude chat with CLAUDE.md as system prompt"
   echo "  ai-ask-file     Claude ask with attached file"
+  echo
+  echo "Inside Claude Code:"
+  echo "  /status         show login method (Max / Pro / API), model and config"
+  echo "  /login          switch between Claude Max and API login if needed"
   echo
   echo "Adjust these names to match your devbox.json \"scripts\" if needed."
 }
