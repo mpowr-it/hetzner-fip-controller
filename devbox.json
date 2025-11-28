@@ -54,7 +54,7 @@
     "GOMODCACHE":                            "$PWD/.devbox/gomodcache",
     "GOBIN":                                 "$PWD/.devbox/gobin",
     "PATH":                                  "$PWD/.devbox/gobin:$PATH",
-    "CLAUDE_MODEL":                          "claude-3-7-sonnet"
+    "ANTHROPIC_MODEL":                       "claude-sonnet-4-5"
   },
   "shell": {
     "init_hook": [
